@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AERO-SIM | Advanced Wing & Foil Analyzer Pickle Brothers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-left">
+    <span class="hdr-title">AERO·SIM</span>
+    <span class="hdr-sub">Wing &amp; Foil Analyzer <span class="ver">Pickle Brothers</span></span>
+  </div>
+  <div class="hdr-center">
+    <span id="statusLine">INITIALIZING SYSTEMS...</span>
+  </div>
+  <div class="hdr-right">
+    <div class="status-dot"><span class="dot"></span>LIVE</div>
+    <div class="env-badge" id="envBadge">EARTH · ISA</div>
+    <div class="unit-badge" id="unitBadge">IMPERIAL</div>
+  </div>
+</header>
+
+<!-- MAIN LAYOUT -->
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <aside class="panel panel-l">
+
+    <!-- PROFILE TYPE -->
+    <div class="psec">
+      <div class="ptitle">Profile Type</div>
+      <div class="ptype-grid">
+        <button class="pbtn active" onclick="setProfile('joukowski',this)">Joukowski</button>
+        <button class="pbtn" onclick="setProfile('naca',this)">NACA 4D</button>
+        <button class="pbtn" onclick="setProfile('ellipse',this)">Ellipse</button>
+        <button class="pbtn" onclick="setProfile('plate',this)">Flat Plate</button>
+        <button class="pbtn" onclick="setProfile('cylinder',this)">Cylinder</button>
+        <button class="pbtn" onclick="setProfile('ball',this)">Ball</button>
+        <div id="sec-ball-type" style="display:none;margin-top:6px">
+          <div class="tog-grid">
+            <button class="tog active" id="btype-smooth" onclick="setBallType('smooth',this)">Smooth</button>
+            <button class="tog" id="btype-rough" onclick="setBallType('rough',this)">Rough</button>
+            <button class="tog" id="btype-golf" onclick="setBallType('golf',this)">Golf</button>
+          </div>
+        </div>
+      </div>
+      <!-- GENERATING PLANE -->
+    <div class="psec" id="sec-genp" style="display:none">
+      <div class="ptitle">Generating Plane</div>
+      <div class="ctrl-row">
+        <label class="ctrl-label">Radius (rc)</label>
+        <div class="ctrl-right">
+          <input type="range" class="slider" min="0" max="100" value="50"
+            oninput="updGenp('rc', +this.value/100*2)">
+          <span class="val-box" id="gv-rc">1.00</span>
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <label class="ctrl-label">X offset (xc)</label>
+        <div class="ctrl-right">
+          <input type="range" class="slider" min="-50" max="50" value="0"
+            oninput="updGenp('xc', +this.value/100)">
+          <span class="val-box" id="gv-xc">0.00</span>
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <label class="ctrl-label">Y offset (yc)</label>
+        <div class="ctrl-right">
+          <input type="range" class="slider" min="-50" max="50" value="0"
+            oninput="updGenp('yc', +this.value/100)">
+          <span class="val-box" id="gv-yc">0.00</span>
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <label class="ctrl-label">Circulation (γ)</label>
+        <div class="ctrl-right">
+          <input type="range" class="slider" min="-100" max="100" value="0"
+            oninput="updGenp('gam', +this.value/100*4)">
+          <span class="val-box" id="gv-gam">0.00</span>
+        </div>
+      </div>
+      <button class="tog" onclick="resetGenp()">Reset</button>
+    </div>
+
+    <!-- AIRFOIL PARAMS (shown for joukowski / naca) -->
+    <div class="psec" id="sec-airfoil">
+      <div class="ptitle">Airfoil Parameters</div>
+
+      <div class="ctrl-row" id="row-camber">
+        <label class="ctrl-label">Camber <span class="unit-lbl">%c</span></label>
+        <div class="ctrl-right">
+          <input type="range" min="-25" max="25" step="0.5" value="0"
+            oninput="updFoil('camber',+this.value)" id="sl-camber">
+          <input type="text" class="val-box" id="vb-camber" value="0.0"
+            onchange="updFoilTxt('camber',+this.value)">
+        </div>
+      </div>
+
+      <div class="ctrl-row" id="row-thick">
+        <label class="ctrl-label">Thickness <span class="unit-lbl">%c</span></label>
+        <div class="ctrl-right">
+          <input type="range" min="1" max="26" step="0.5" value="12.5"
+            oninput="updFoil('thick',+this.value)" id="sl-thick">
+          <input type="text" class="val-box" id="vb-thick" value="12.5"
+            onchange="updFoilTxt('thick',+this.value)">
+        </div>
+      </div>
+
+      <div class="foil-label" id="foil-designation">NACA 0012</div>
+    </div>
+
+    <!-- CYLINDER / BALL PARAMS -->
+    <div class="psec" id="sec-cylinder" style="display:none">
+      <div class="ptitle">Cylinder / Ball</div>
+
+      <div class="ctrl-row">
+        <label class="ctrl-label">Spin <span class="unit-lbl">RPM</span></label>
+        <div class="ctrl-right">
+          <input type="range" min="-1500" max="1500" step="10" value="0"
+            oninput="updCyl('spin',+this.value)" id="sl-spin">
+          <input type="text" class="val-box" id="vb-spin" value="0"
+            onchange="updCylTxt('spin',+this.value)">
+        </div>
+      </div>
+
+      <div class="ctrl-row">
+        <label class="ctrl-label">Radius <span class="unit-lbl" id="rad-unit">ft</span></label>
+        <div class="ctrl-right">
+          <input type="range" min="1" max="1000" step="1" value="100"
+            oninput="updCyl('radius',this.value/200)" id="sl-radius">
+          <input type="text" class="val-box" id="vb-radius" value="0.5"
+            onchange="updCylTxt('radius',+this.value)">
+        </div>
+      </div>
+    </div>
+
+    <!-- WING PLANFORM -->
+    <div class="psec" id="sec-planform">
+      <div class="ptitle">Wing Planform</div>
+      <div class="wtype-grid">
+        <button class="wbtn active" onclick="setWingType('rectangular',this)">Rect</button>
+        <button class="wbtn" onclick="setWingType('tapered',this)">Taper</button>
+        <button class="wbtn" onclick="setWingType('swept',this)">Swept</button>
+        <button class="wbtn" onclick="setWingType('delta',this)">Delta</button>
+        <button class="wbtn" onclick="setWingType('elliptical',this)">Ellip</button>
+        <button class="wbtn" onclick="setWingType('custom',this)">Custom</button>
+      </div>
+    </div>
+
+    <!-- WING GEOMETRY -->
+    <div class="psec" id="sec-winggeom">
+      <div class="ptitle">Wing Geometry</div>
+
+      <div class="ctrl-row">
+        <label class="ctrl-label">Span <span class="unit-lbl" id="span-unit">ft</span></label>
+        <div class="ctrl-right">
+          <input type="range" min="0" max="1000" step="1" value="400"
+            oninput="updWing('span',this.value/1000)" id="sl-span">
+          <input type="text" class="val-box" id="vb-span" value="20.0"
+            onchange="updWingTxt('span',+this.value)">
+        </div>
+      </div>
+
+      <div class="ctrl-row">
+        <label class="ctrl-label">Root Chord <span class="unit-lbl" id="chord-unit">ft</span></label>
+        <div class="ctrl-right">
+          <input type="range" min="0" max="1000" step="1" value="200"
+            oninput="updWing('chord',this.value/1000)" id="sl-chord">
+          <input type="text" class="val-box" id="vb-chord" value="5.0"
+            onchange="updWingTxt('chord',+this.value)">
+        </div>
+      </div>
+
+      <div class="ctrl-row" id="row-taper">
+        <label class="ctrl-label">Taper Ratio</label>
+        <div class="ctrl-right">
+          <input type="range" min="0" max="1000" step="1" value="1000"
+            oninput="updWing('taper',this.value/1000)" id="sl-taper">
+          <input type="text" class="val-box" id="vb-taper" value="1.00"
+            onchange="updWingTxt('taper',+this.value)">
+        </div>
+      </div>
+
+      <div class="ctrl-row" id="row-sweep">
+        <label class="ctrl-label">Sweep <span class="unit-lbl">°</span></label>
+        <div class="ctrl-right">
+          <input type="range" min="0" max="1000" step="1" value="0"
+            oninput="updWing('sweep',this.value/1000)" id="sl-sweep">
+          <input type="text" class="val-box" id="vb-sweep" value="0.0"
+            onchange="updWingTxt('sweep',+this.value)">
+        </div>
+      </div>
+
+      <div class="ctrl-row">
+        <label class="ctrl-label">Dihedral <span class="unit-lbl">°</span></label>
+        <div class="ctrl-right">
+          <input type="range" min="0" max="1000" step="1" value="250"
+            oninput="updWing('dihedral',this.value/1000)" id="sl-dihedral">
+          <input type="text" class="val-box" id="vb-dihedral" value="0.0"
+            onchange="updWingTxt('dihedral',+this.value)">
+        </div>
+      </div>
+
+      <div class="ctrl-row">
+        <label class="ctrl-label">Washout <span class="unit-lbl">°</span></label>
+        <div class="ctrl-right">
+          <input type="range" min="0" max="1000" step="1" value="250"
+            oninput="updWing('washout',this.value/1000)" id="sl-washout">
+          <input type="text" class="val-box" id="vb-washout" value="0.0"
+            onchange="updWingTxt('washout',+this.value)">
+        </div>
+      </div>
+    </div>
+
+    <!-- DISPLAY OPTIONS -->
+    <div class="psec">
+      <div class="ptitle">Display</div>
+      <div class="tog-grid">
+        <button class="tog active" id="tog-wire" onclick="togDisp('wire',this)">Wireframe</button>
+        <button class="tog active" id="tog-ribs" onclick="togDisp('ribs',this)">Ribs</button>
+        <button class="tog active" id="tog-grid" onclick="togDisp('grid',this)">Grid</button>
+        <button class="tog" id="tog-rot" onclick="togDisp('rot',this)">Auto-Rot</button>
+        <button class="tog active" id="tog-cp" onclick="togDisp('cp',this)">Cp Plot</button>
+        <button class="tog active" id="tog-foil" onclick="togDisp('foil',this)">Foil View</button>
+        <button class="tog" id="tog-flow" onclick="togDisp('flow',this)">Flow Field</button>
+        <button class="tog" id="tog-clplot" onclick="togDisp('clplot',this)">CL-Alpha</button>
+        <button class="tog" id="tog-probe" onclick="togDisp('probe',this)">Probe</button>
+        <button class="tog" onclick="exportReport()">Export</button>
+        <button class="tog" onclick="exportCSV()">CSV</button>
+        <button class="tog" id="btn-share" onclick="shareLink()">Share</button>
+        <button class="tog" onclick="exportCompareReport()">Cmp</button>
+        <button class="tog" onclick="runOptimize()">Opt</button>
+        <button class="tog" onclick="addPolarSnap()">+Polar</button>
+        <button class="tog" onclick="clearPolarSnaps()">-Polar</button>
+        <button class="tog" id="tog-liftmeter" onclick="togDisp('liftmeter',this)">Lift Meter</button>
+        <button class="tog" id="tog-particles" onclick="togDisp('particles',this)">Particles</button>
+      </div>
+    </div>
+
+    <!-- ENVIRONMENT -->
+    <div class="psec">
+      <div class="ptitle">Environment</div>
+      <div class="env-grid">
+        <button class="ebtn active" onclick="setEnv('earth',this)">🌍 Earth</button>
+        <button class="ebtn" onclick="setEnv('mars',this)">🔴 Mars</button>
+        <button class="ebtn" onclick="setEnv('water',this)">💧 Water</button>
+        <button class="ebtn" onclick="setEnv('custom',this)">⚙ Custom</button>
+      </div>
+      <div id="sec-custom-env" style="display:none; margin-top:10px;">
+        <div class="ctrl-row">
+          <label class="ctrl-label">Density <span class="unit-lbl">slug/ft³</span></label>
+          <div class="ctrl-right">
+            <input type="text" class="val-box" id="vb-density" value="0.00238"
+              onchange="updCustomEnv('density',+this.value)" style="width:80px">
+          </div>
+        </div>
+        <div class="ctrl-row">
+          <label class="ctrl-label">Temp <span class="unit-lbl">°R</span></label>
+          <div class="ctrl-right">
+            <input type="text" class="val-box" id="vb-temp" value="518.6"
+              onchange="updCustomEnv('temp',+this.value)" style="width:80px">
+          </div>
+        </div>
+        <div class="ctrl-row">
+          <label class="ctrl-label">Pressure <span class="unit-lbl">psf</span></label>
+          <div class="ctrl-right">
+            <input type="text" class="val-box" id="vb-press" value="2116.0"
+              onchange="updCustomEnv('press',+this.value)" style="width:80px">
+          </div>
+        </div>
+        <div class="ctrl-row">
+          <label class="ctrl-label">Viscosity <span class="unit-lbl">slug/ft·s</span></label>
+          <div class="ctrl-right">
+            <input type="text" class="val-box" id="vb-viscos" value="3.737e-7"
+              onchange="updCustomEnv('viscos',+this.value)" style="width:80px">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="psec">
+      <div class="ptitle">Theme</div>
+      <div class="opt-row">
+         <button class="tog tbtn active" id="tbtn-dark"  onclick="setTheme('dark')">Dark</button>
+         <button class="tog tbtn"        id="tbtn-light" onclick="setTheme('light')">Light</button>
+      </div>
+    </div>
+    <!-- UNITS -->
+    <div class="psec">
+      <div class="ptitle">Units</div>
+      <div class="unit-grid">
+        <button class="ubtn active" id="ubtn-imperial" onclick="setUnits('imperial',this)">Imperial</button>
+        <button class="ubtn" id="ubtn-metric" onclick="setUnits('metric',this)">Metric</button>
+      </div>
+    </div>
+
+    <div class="psec">
+  <div class="ptitle">Unit Converter</div>
+  <div style="font-size:10px;color:#5A8BAA;">
+    <input id="uc-val" type="number" value="1" style="width:60px;background:#0D2235;color:#5A8BAA;border:1px solid #163348;padding:2px;" oninput="convertUnits()">
+    <select id="uc-from" style="background:#0D2235;color:#5A8BAA;border:1px solid #163348;font-size:10px;" onchange="convertUnits()">
+      <option value="ft">ft</option>
+      <option value="m">m</option>
+      <option value="mph">mph</option>
+      <option value="kmh">km/h</option>
+      <option value="kts">knots</option>
+      <option value="fts">ft/s</option>
+      <option value="lbs">lbs</option>
+      <option value="N">N</option>
+      <option value="psi">psi</option>
+      <option value="kpa">kPa</option>
+    </select>
+    <span style="color:#FF6B35;">→</span>
+    <select id="uc-to" style="background:#0D2235;color:#5A8BAA;border:1px solid #163348;font-size:10px;" onchange="convertUnits()">
+      <option value="m">m</option>
+      <option value="ft">ft</option>
+      <option value="kmh">km/h</option>
+      <option value="mph">mph</option>
+      <option value="kts">knots</option>
+      <option value="fts">ft/s</option>
+      <option value="N">N</option>
+      <option value="lbs">lbs</option>
+      <option value="kpa">kPa</option>
+      <option value="psi">psi</option>
+    </select>
+    <div style="margin-top:4px;">= <span id="uc-result" style="color:#00E5A0;font-weight:bold;">1.000</span></div>
+  </div>
+</div>
+    <div class="psec">
+      <div class="ptitle">Optimization</div>
+      <div style="font-size:10px;color:#5A8BAA;">
+        <div style="margin-bottom:4px;">Target:
+            <select id="opt-target" style="background:#0D2235;color:#5A8BAA;border:1px solid #163348;font-size:10px;">
+            <option value="ld">Max L/D</option>
+            <option value="cl">Max CL</option>
+            <option value="drag">Min Drag</option>
+          </select>
+        </div>
+        <div id="opt-result" style="color:#00E5A0;font-size:9px;min-height:24px;"></div>
+      </div>
+    </div>
+    <div class="psec">
+      <div class="ptitle">Weather / Climate</div>
+     <select id="weather-db" style="width:100%;background:#0D2235;color:#5A8BAA;border:1px solid #163348;padding:3px;font-size:10px;" onchange="loadWeather(this.value)">
+       <option value="">— select condition —</option>
+       <option value="isa">ISA Standard</option>
+       <option value="hot">Hot Day (+35°F)</option>
+       <option value="cold">Cold Day (-35°F)</option>
+       <option value="tropical">Tropical (+50°F)</option>
+       <option value="arctic">Arctic (-60°F)</option>
+      </select>
+    </div>      
+    <div class="psec">
+      <div class="ptitle">Aircraft Database</div>
+      <select id="aircraft-db" style="width:100%;background:#0D2235;color:#5A8BAA;border:1px solid #163348;padding:3px;font-size:10px;" onchange="loadAircraft(this.value)">
+        <option value="">— select aircraft —</option>
+        <option value="cessna172">Cessna 172</option>
+        <option value="boeing737">Boeing 737-800</option>
+        <option value="f16">F-16 Fighting Falcon</option>
+        <option value="concorde">Concorde</option>
+        <option value="b2">B-2 Spirit</option>
+        <option value="a320">Airbus A320</option>
+        <option value="spitfire">Supermarine Spitfire</option>
+      </select>
+    </div>
+    <div class="psec">
+      <div class="ptitle">Import Profile (CSV/TXT)</div>
+      <div style="font-size:10px;color:#5A8BAA;">
+        <input type="file" id="profile-import" accept=".csv,.txt,.dat"
+          style="width:100%;font-size:9px;color:#5A8BAA;"
+          onchange="importProfile(this)">
+        <div id="import-status" style="margin-top:3px;font-size:9px;color:#00E5A0;"></div>
+      </div>
+    </div>
+    <!-- RESET -->
+    <div class="psec">
+      <div class="ptitle">NACA Database</div>
+      <div style="display:flex;gap:4px;margin-bottom:4px;">
+       <input id="naca-custom" type="text" placeholder="e.g. 2412" maxlength="5"
+        style="width:70px;background:#0D2235;color:#5A8BAA;border:1px solid #163348;padding:3px;font-size:10px;"
+        oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+       <button class="tog" onclick="loadCustomNACA()">Load</button>
+      </div>
+      <select id="naca-db" style="width:100%;background:#0D2235;color:#5A8BAA;border:1px solid #163348;padding:3px;font-size:10px;" onchange="loadNACA(this.value)">
+        <option value="">— select profile —</option>
+        <option value="0012">NACA 0012 — Symmetric</option>
+        <option value="2412">NACA 2412 — General Aviation</option>
+        <option value="4412">NACA 4412 — High Lift</option>
+        <option value="6412">NACA 6412 — Aggressive Camber</option>
+        <option value="0006">NACA 0006 — Thin Symmetric</option>
+        <option value="2415">NACA 2415 — Trainer</option>
+        <option value="4415">NACA 4415 — STOL</option>
+        <option value="23012">NACA 23012 — Airliner</option>
+      </select>
+    </div>
+
+    <div class="psec">
+      <div class="ptitle">Presets</div>
+      <div class="opt-row" style="gap:4px;flex-wrap:wrap;">
+        <button class="tog" onclick="savePreset()">💾 Save</button>
+        <button class="tog" onclick="loadPreset()">📂 Load</button>
+        <button class="tog" onclick="clearPresets()">🗑</button>
+      </div>
+      <select id="preset-list" style="width:100%;margin-top:4px;background:#0D2235;color:#5A8BAA;border:1px solid #163348;padding:3px;font-size:10px;"></select>
+    </div>
+
+    <div class="psec">
+      <button class="reset-btn" onclick="resetAll()">↺ RESET DEFAULTS</button>
+    </div>
+
+  </aside>
+
+  <!-- CENTER VIEWPORT -->
+  <main class="viewport">
+    <canvas id="c3d"></canvas>
+
+    <!-- Corner brackets -->
+    <div class="bracket tl"></div>
+    <div class="bracket tr"></div>
+    <div class="bracket bl"></div>
+    <div class="bracket br"></div>
+
+    <!-- View snap buttons -->
+    <div class="view-snaps">
+      <button class="snap active" id="snap-iso" onclick="snapView('iso',this)">ISO</button>
+      <button class="snap" id="snap-top" onclick="snapView('top',this)">TOP</button>
+      <button class="snap" id="snap-front" onclick="snapView('front',this)">FRONT</button>
+      <button class="snap" id="snap-side" onclick="snapView('side',this)">SIDE</button>
+    </div>
+
+    <!-- Crosshair overlay -->
+    <div class="crosshair-h"></div>
+    <div class="crosshair-v"></div>
+
+    <!-- Mouse hints -->
+    <div class="mouse-hints">
+      <span>LMB: Rotate</span>
+      <span>RMB: Pan</span>
+      <span>Scroll: Zoom</span>
+    </div>
+
+    <!-- Cp plot canvas (overlay bottom) -->
+    <div class="cp-overlay" id="cp-overlay">
+      <canvas id="cpCanvas" width="340" height="150"></canvas>
+      <div id="cp-legend" style="display:flex;justify-content:space-between;font-size:8px;color:#3A6080;padding:0 4px;margin-top:2px;">
+        <span style="color:#FF6B35;">Cp=-3</span>
+        <span>-2</span>
+        <span>-1</span>
+        <span style="color:#5A8BAA;">0</span>
+        <span>+1</span>
+        <span style="color:#00D4FF;">■ Upper</span>
+        <span style="color:#FF6B35;">■ Lower</span>
+      </div>
+    </div>
+
+    <div class="flow-overlay" id="flow-overlay" style="display:none">
+      <canvas id="flowCanvas" width="400" height="300"></canvas>
+    </div>
+    <div class="probe-overlay" id="probe-overlay" style="display:none">
+      <span id="probe-text">Click on flow field</span>
+    </div>
+    <div class="liftmeter-overlay" id="liftmeter-overlay" style="display:none">
+      <canvas id="liftmeterCanvas" width="200" height="60"></canvas>
+    </div>
+    <div class="clplot-overlay" id="clplot-overlay" style="display:none">
+      <div class="plot-tabs">
+        <button class="ptab active" id="ptab-0" onclick="setPlotType(0,this)">Cp</button>
+        <button class="ptab" id="ptab-1" onclick="setPlotType(1,this)">Vel</button>
+        <button class="ptab" id="ptab-2" onclick="setPlotType(2,this)">CL-α</button>
+        <button class="ptab" id="ptab-3" onclick="setPlotType(3,this)">CD-α</button>
+        <button class="ptab" id="ptab-4" onclick="setPlotType(4,this)">CL-thk</button>
+        <button class="ptab" id="ptab-5" onclick="setPlotType(5,this)">CD-thk</button>
+        <button class="ptab" id="ptab-6" onclick="setPlotType(6,this)">CL-cam</button>
+        <button class="ptab" id="ptab-7" onclick="setPlotType(7,this)">CD-cam</button>
+        <button class="ptab" id="ptab-8" onclick="setPlotType(8,this)">L-spd</button>
+        <button class="ptab" id="ptab-9" onclick="setPlotType(9,this)">D-spd</button>
+        <button class="ptab" id="ptab-10" onclick="setPlotType(10,this)">L-alt</button>
+        <button class="ptab" id="ptab-11" onclick="setPlotType(11,this)">D-alt</button>
+        <button class="ptab" id="ptab-12" onclick="setPlotType(12,this)">Polar</button>
+        <button class="ptab" id="ptab-13" onclick="setPlotType(13,this)">L-Area</button>
+        <button class="ptab" id="ptab-14" onclick="setPlotType(14,this)">L-Dens</button>
+        <button class="ptab" id="ptab-15" onclick="setPlotType(15,this)">Span</button>
+        <button class="ptab" id="ptab-16" onclick="setPlotType(16,this)">Bend</button>
+        <button class="ptab" id="ptab-17" onclick="setPlotType(17,this)">Multi</button>
+        <button class="ptab" id="ptab-18" onclick="setPlotType(18,this)">Range</button>
+      </div>
+      <canvas id="clplotCanvas" width="520" height="400"></canvas>
+    </div>
+    <!-- Foil preview -->
+    <div class="foil-overlay" id="foil-overlay">
+      <canvas id="foilCanvas" width="160" height="80"></canvas>
+    </div>
+  </main>
+
+  <!-- RIGHT PANEL -->
+  <aside class="panel panel-r">
+
+    <!-- GEOMETRY OUTPUTS -->
+    <div class="psec">
+      <div class="ptitle">Geometry</div>
+      <div class="data-card blue">
+        <div class="dc-row"><span class="dc-lbl">Aspect Ratio</span><span class="dc-val" id="out-ar">4.00</span></div>
+        <div class="dc-row"><span class="dc-lbl">Wing Area</span><span class="dc-val" id="out-area">100.0 <span class="dc-unit">ft²</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">MAC</span><span class="dc-val" id="out-mac">5.00 <span class="dc-unit">ft</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">Tip Chord</span><span class="dc-val" id="out-tipchord">5.00 <span class="dc-unit">ft</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">Wetted Area</span><span class="dc-val" id="out-wetted">202.0 <span class="dc-unit">ft²</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">Wing Volume</span><span class="dc-val" id="out-volume">0.0 <span class="dc-unit">ft³</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">Span</span><span class="dc-val" id="out-span">20.0 <span class="dc-unit">ft</span></span></div>
+      </div>
+    </div>
+
+    <!-- AERODYNAMIC OUTPUTS -->
+    <div class="psec">
+      <div class="ptitle">Aerodynamics</div>
+      <div class="data-card green">
+        <div class="dc-row"><span class="dc-lbl">CL</span><span class="dc-val" id="out-cl">0.000</span></div>
+        <div class="dc-row"><span class="dc-lbl">CDi</span><span class="dc-val" id="out-cdi">0.000</span></div>
+        <div class="dc-row"><span class="dc-lbl">CD (total)</span><span class="dc-val" id="out-cd">0.0000</span></div>
+        <div class="dc-row"><span class="dc-lbl">Reynolds</span><span class="dc-val" id="out-re">0</span></div>
+        <div class="dc-row"><span class="dc-lbl">Mach</span><span class="dc-val" id="out-mach">0.0000</span></div>
+        <div class="dc-row"><span class="dc-lbl">Regime</span><span class="dc-val" id="out-regime">Incompressible</span></div>
+        <div class="dc-row"><span class="dc-lbl">Mach Eff.</span><span class="dc-val" id="out-macheff">0.0000</span></div>
+        <div class="dc-row"><span class="dc-lbl">PG Factor</span><span class="dc-val" id="out-pgfactor">1.000</span></div>
+        <div class="dc-row"><span class="dc-lbl">Cm (c/4)</span><span class="dc-val" id="out-cm">0.0000</span></div>
+        <div class="dc-row"><span class="dc-lbl">Stall α</span><span class="dc-val" id="out-stall">10.0°</span></div>
+        <div class="dc-row"><span class="dc-lbl">Buffet Mach</span><span class="dc-val" id="out-buffet">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Buffet Margin</span><span class="dc-val" id="out-buffetmargin">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Icing CL</span><span class="dc-val" id="out-icingcl">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Icing CD</span><span class="dc-val" id="out-icingcd">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Icing L/D</span><span class="dc-val" id="out-icingld">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Flap CL</span><span class="dc-val" id="out-flapcl">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Flap L/D</span><span class="dc-val" id="out-flapld">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">GE Factor</span><span class="dc-val" id="out-geratio">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">GE L/D</span><span class="dc-val" id="out-geld">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">VLM CL</span><span class="dc-val" id="out-vlmcl">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">VLM CDi</span><span class="dc-val" id="out-vlmcdi">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">VLM L/D</span><span class="dc-val" id="out-vlmld">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">VLM Span Eff</span><span class="dc-val" id="out-vlmspaneff">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Tip Deflect</span><span class="dc-val" id="out-tipdef">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Flutter Speed</span><span class="dc-val" id="out-flutter">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Aeroelastic CL</span><span class="dc-val" id="out-aecl">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Thrust</span><span class="dc-val" id="out-thrust">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Prop Eff</span><span class="dc-val" id="out-propeff">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Prop Ct</span><span class="dc-val" id="out-proptc">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Mach Angle</span><span class="dc-val" id="out-machangle">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Sonic Boom</span><span class="dc-val" id="out-sonicboom">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Boom Dist</span><span class="dc-val" id="out-boomdist">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Wave CD</span><span class="dc-val" id="out-wavecd">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Area Rule CD</span><span class="dc-val" id="out-arearulecd">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Gust Speed</span><span class="dc-val" id="out-gust">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Turb AoA</span><span class="dc-val" id="out-turbaoa">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Turb CL</span><span class="dc-val" id="out-turbcl">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Turb CD</span><span class="dc-val" id="out-turbcd">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Phugoid T</span><span class="dc-val" id="out-phugoid">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Phugoid Damp</span><span class="dc-val" id="out-phudamp">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Short Period T</span><span class="dc-val" id="out-shortperiod">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Dutch Roll T</span><span class="dc-val" id="out-dutchroll">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Fuel Weight</span><span class="dc-val" id="out-fuelwt">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Curr Weight</span><span class="dc-val" id="out-curwt">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">CL Required</span><span class="dc-val" id="out-clreq">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Vs Actual</span><span class="dc-val" id="out-vsact">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Total Thrust</span><span class="dc-val" id="out-totalthrust">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Asym Thrust</span><span class="dc-val" id="out-asymthrust">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Vmca</span><span class="dc-val" id="out-vmca">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Eng Out Drag</span><span class="dc-val" id="out-engoutdrag">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Rec. Profile</span><span class="dc-val" id="out-recprofile" style="font-size:9px;">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">CP (x/c)</span><span class="dc-val" id="out-cp-pos">0.25</span></div>
+        <div class="dc-row"><span class="dc-lbl">NP (x/c)</span><span class="dc-val" id="out-np-pos">0.25</span></div>
+        <div class="dc-row"><span class="dc-lbl">Static Margin</span><span class="dc-val" id="out-sm">0.00</span></div>
+        <div class="dc-row"><span class="dc-lbl">Trim AoA</span><span class="dc-val" id="out-trimaoa">0.0°</span></div>
+        <div class="dc-row"><span class="dc-lbl">Takeoff Dist</span><span class="dc-val" id="out-tods">0</span></div>
+        <div class="dc-row"><span class="dc-lbl">Landing Dist</span><span class="dc-val" id="out-lds">0</span></div>
+        <div class="dc-row"><span class="dc-lbl">Opt. AoA</span><span class="dc-val" id="out-optaoa">0.0°</span></div>
+        <div class="dc-row"><span class="dc-lbl">Max L/D</span><span class="dc-val" id="out-maxld">0.0</span></div>
+        <div class="dc-row"><span class="dc-lbl">Winglet L/D</span><span class="dc-val" id="out-wingletld">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Winglet CDi</span><span class="dc-val" id="out-wingletcdi">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Ground Speed</span><span class="dc-val" id="out-gs">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Headwind</span><span class="dc-val" id="out-hw">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Crosswind</span><span class="dc-val" id="out-cw">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">L/D Ratio</span><span class="dc-val" id="out-ld">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Opt. AoA</span><span class="dc-val" id="out-optaoa">0.0°</span></div>
+        <div class="dc-row"><span class="dc-lbl">Max L/D</span><span class="dc-val" id="out-maxld">0.0</span></div>
+        <div class="dc-row"><span class="dc-lbl">Oswald e</span><span class="dc-val" id="out-e">0.85</span></div>
+        <div class="dc-row"><span class="dc-lbl">Lift Force</span><span class="dc-val" id="out-lift">0.00 <span class="dc-unit">lbs</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">Induced Drag</span><span class="dc-val" id="out-drag">0.00 <span class="dc-unit">lbs</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">Dyn. Pressure</span><span class="dc-val" id="out-q">0.00 <span class="dc-unit">psf</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">Stall Speed</span><span class="dc-val" id="out-vs">0.0</span></div>
+        <div class="dc-row"><span class="dc-lbl">Range</span><span class="dc-val" id="out-range">0.0</span></div>
+        <div class="dc-row"><span class="dc-lbl">Endurance</span><span class="dc-val" id="out-endurance">0.0</span></div>
+      </div>
+      <!-- L/D bar -->
+      <div class="ld-bar-wrap">
+        <div class="ld-bar-bg">
+          <div class="ld-bar-fill" id="ld-bar"></div>
+        </div>
+        <span class="ld-bar-label">L/D Efficiency</span>
+      </div>
+    </div>
+
+    <!-- STABILITY -->
+    <div class="psec">
+      <div class="ptitle">Stability</div>
+      <div class="data-card orange">
+        <div class="dc-row"><span class="dc-lbl">Stall Margin</span><span class="dc-val" id="out-stall">10.0 <span class="dc-unit">°</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">Stall Factor</span><span class="dc-val" id="out-stallfact">1.000</span></div>
+        <div class="dc-row"><span class="dc-lbl">Stall α</span><span class="dc-val" id="out-stallangle">10.0°</span></div>
+        <div class="dc-row"><span class="dc-lbl">Cm (c/4)</span><span class="dc-val" id="out-cm">0.0000</span></div>
+        <div class="dc-row"><span class="dc-lbl">AR Correction</span><span class="dc-val" id="out-arcor">OFF</span></div>
+        <div class="dc-row"><span class="dc-lbl">Circulation Γ</span><span class="dc-val" id="out-gamma">0.000</span></div>
+      </div>
+      <div class="warn-box" id="warn-stall" style="display:none">
+        ⚠ STALL REGION — α &gt; 10°
+      </div>
+      <div class="warn-box warn-ar" id="warn-ar" style="display:none">
+        ⚠ LOW AR — Tip vortex effects significant
+      </div>
+    </div>
+
+    <!-- ATMOSPHERE -->
+    <div class="psec">
+      <div class="ptitle">Atmosphere</div>
+      <div class="data-card yellow">
+        <div class="dc-row"><span class="dc-lbl">Density ρ</span><span class="dc-val" id="out-rho">0.00238 <span class="dc-unit">slug/ft³</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">Pressure p</span><span class="dc-val" id="out-ps">14.70 <span class="dc-unit">psi</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">Temperature</span><span class="dc-val" id="out-temp">59.0 <span class="dc-unit">°F</span></span></div>
+        <div class="dc-row"><span class="dc-lbl">Layer</span><span class="dc-val" id="out-layer">Troposphere</span></div>
+        <div class="dc-row"><span class="dc-lbl">ISA Deviation</span><span class="dc-val" id="out-isadev">0.0</span></div>
+      </div>
+    </div>
+
+    <!-- AR CORRECTION TOGGLE -->
+    <div class="psec">
+      <div class="ptitle">Options</div>
+      <div class="opt-row">
+        <span class="opt-label">AR Correction (Prandtl)</span>
+        <button class="tog" id="tog-arcor" onclick="togARcor(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Stall Model</span>
+        <button class="tog active" id="tog-stall" onclick="togStallModel(this)">ON</button>
+        <button class="tog active" id="tog-kutta" onclick="togKutta(this)">Kutta</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Prandtl-Glauert (M&lt;0.85)</span>
+        <button class="tog active" id="tog-pg" onclick="togPG(this)">ON</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Compare Snapshot</span>
+        <button class="tog" id="tog-compare" onclick="togCompare(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Tooltips</span>
+        <button class="tog" id="tog-tooltip" onclick="togTooltip(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">AoA Sweep Anim</span>
+        <button class="tog" id="tog-aoasweep" onclick="togAoaSweep(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Winglet Effect</span>
+        <button class="tog" id="tog-winglet" onclick="togWinglet(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Wind Effect</span>
+        <button class="tog" id="tog-wind" onclick="togWind(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Icing</span>
+        <button class="tog" id="tog-icing" onclick="togIcing(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Flaps</span>
+        <button class="tog" id="tog-flap" onclick="togFlap(this)">OFF</button>
+      </div>
+      <div id="sec-flap" style="display:none;">
+        <div class="opt-row">
+          <span class="opt-label">Flap Angle</span>
+          <input type="range" min="0" max="1000" value="500" style="width:60px;"
+            oninput="S.flapAngle=this.value/1000*40; document.getElementById('fv-flap').textContent=S.flapAngle.toFixed(0)+'°'; update(false)">
+          <span id="fv-flap" style="color:#FF6B35;font-size:9px;">20°</span>
+        </div>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Slats</span>
+        <button class="tog" id="tog-slat" onclick="togSlat(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Ground Effect</span>
+        <button class="tog" id="tog-ge" onclick="togGE(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">VLM</span>
+        <button class="tog" id="tog-vlm" onclick="togVLM(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Aeroelastic</span>
+        <button class="tog" id="tog-ae" onclick="togAE(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Propeller</span>
+        <button class="tog" id="tog-prop" onclick="togProp(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+          <span class="opt-label">Turbulence</span>
+          <button class="tog" id="tog-turb" onclick="togTurb(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Fuel Model</span>
+        <button class="tog" id="tog-fuel" onclick="togFuel(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Multi-Engine</span>
+        <button class="tog" id="tog-me" onclick="togME(this)">OFF</button>
+      </div>
+      <div id="sec-me" style="display:none;">
+        <div class="opt-row">
+          <span class="opt-label">Engines</span>
+          <select id="sel-engines" style="background:#0D2235;color:#5A8BAA;border:1px solid #163348;font-size:10px;"
+            onchange="S.engineCount=parseInt(this.value); update(false)">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="4">4</option>
+          </select>
+        </div>
+        <div class="opt-row">
+          <span class="opt-label">Engine Out</span>
+          <button class="tog" id="tog-engout" onclick="togEngOut(this)">OFF</button>
+        </div>
+      </div>
+      <div id="sec-fuel" style="display:none;">
+        <div class="opt-row">
+          <span class="opt-label">Fuel %</span>
+          <input type="range" min="0" max="1000" value="1000" style="width:55px;"
+            oninput="S.fuelFraction=this.value/1000; document.getElementById('fv-fuel').textContent=(S.fuelFraction*100).toFixed(0)+'%'; update(false)">
+          <span id="fv-fuel" style="color:#FF6B35;font-size:9px;">100%</span>
+        </div>
+        <div class="opt-row">
+          <span class="opt-label">Gross Wt</span>
+          <input type="range" min="0" max="1000" value="250" style="width:55px;"
+            oninput="S.grossWeight=this.value/1000*20000; document.getElementById('fv-gw').textContent=S.grossWeight.toFixed(0); update(false)">
+          <span id="fv-gw" style="color:#FF6B35;font-size:9px;">5000</span>
+        </div>
+      </div>
+      <div id="sec-turb" style="display:none;">
+        <div class="opt-row">
+          <span class="opt-label">Intensity</span>
+          <input type="range" min="0" max="1000" value="50" style="width:60px;"
+            oninput="S.turbIntensity=this.value/1000; document.getElementById('fv-turb').textContent=(S.turbIntensity*100).toFixed(0)+'%'; update(false)">
+          <span id="fv-turb" style="color:#FF6B35;font-size:9px;">5%</span>
+        </div>
+      </div>
+      <div id="sec-prop" style="display:none;">
+        <div class="opt-row">
+          <span class="opt-label">RPM</span>
+          <input type="range" min="0" max="1000" value="500" style="width:55px;"
+            oninput="S.propRPM=this.value/1000*5000; document.getElementById('fv-proprpm').textContent=S.propRPM.toFixed(0); update(false)">
+          <span id="fv-proprpm" style="color:#FF6B35;font-size:9px;">2400</span>
+        </div>
+        <div class="opt-row">
+          <span class="opt-label">Diam</span>
+          <input type="range" min="0" max="1000" value="400" style="width:55px;"
+            oninput="S.propDiam=this.value/1000*15; document.getElementById('fv-propdiam').textContent=S.propDiam.toFixed(1); update(false)">
+          <span id="fv-propdiam" style="color:#FF6B35;font-size:9px;">6.0</span>
+        </div>
+      </div>
+      <div id="sec-ae" style="display:none;">
+        <div class="opt-row">
+          <span class="opt-label">Stiffness EI</span>
+          <input type="range" min="0" max="1000" value="500" style="width:60px;"
+            oninput="S.EI=Math.pow(10, 4+this.value/1000*4); document.getElementById('fv-ei').textContent=S.EI.toExponential(1); update(false)">
+          <span id="fv-ei" style="color:#FF6B35;font-size:9px;">1e6</span>
+        </div> 
+      </div>
+      <div id="sec-icing" style="display:none;">
+        <div class="opt-row">
+          <span class="opt-label">Severity</span>
+          <input type="range" min="0" max="1000" value="300" style="width:60px;"
+            oninput="S.icingSeverity=this.value/1000; document.getElementById('fv-icing').textContent=(S.icingSeverity*100).toFixed(0)+'%'; update(false)">
+          <span id="fv-icing" style="color:#FF6B35;font-size:9px;">30%</span>
+        </div>
+      </div>
+      <div id="sec-wind" style="display:none;">
+        <div class="opt-row">
+          <span class="opt-label">Wind Speed</span>
+          <input type="range" min="0" max="1000" value="0" style="width:60px;"
+            oninput="S.windSpeed=this.value/1000*100; document.getElementById('fv-wind').textContent=S.windSpeed.toFixed(0); update(false)">
+          <span id="fv-wind" style="color:#FF6B35;font-size:9px;">0</span>
+        </div>
+        <div class="opt-row">
+          <span class="opt-label">Wind Angle</span>
+          <input type="range" min="0" max="1000" value="0" style="width:60px;"
+            oninput="S.windAngle=this.value/1000*360; document.getElementById('fv-windangle').textContent=S.windAngle.toFixed(0)+'°'; update(false)">
+          <span id="fv-windangle" style="color:#FF6B35;font-size:9px;">0°</span>
+        </div>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Winglet h/b</span>
+        <input type="range" min="0" max="1000" value="100" style="width:80px;"
+          oninput="S.wingletH=this.value/1000*0.4; update(false)">
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">Flight Sim (↑↓←→)</span>
+        <button class="tog" id="tog-flightsim" onclick="togFlightSim(this)">OFF</button>
+      </div>
+      <div id="sim-display" style="font-size:9px;color:#FF6B35;margin-top:4px;display:none;"></div>
+      
+    </div>
+
+  </aside>
+</div>
+
+<!-- BOTTOM FLIGHT BAR -->
+<div class="fbar">
+  <div class="fbar-item">
+    <label class="fbar-label">Velocity <span class="fbar-unit" id="vel-unit">mph</span></label>
+    <input type="range" min="0" max="1000" step="1" value="400" id="sl-vel"
+      oninput="updFlight('vel',this.value/1000)">
+    <span class="fbar-val" id="fv-vel">100.0</span>
+  </div>
+  <div class="fbar-item">
+    <label class="fbar-label">Altitude <span class="fbar-unit" id="alt-unit">ft</span></label>
+    <input type="range" min="0" max="1000" step="1" value="0" id="sl-alt"
+      oninput="updFlight('alt',this.value/1000)">
+    <span class="fbar-val" id="fv-alt">0</span>
+  </div>
+  <div class="fbar-item">
+    <label class="fbar-label">Angle of Attack <span class="fbar-unit">°</span></label>
+    <input type="range" min="0" max="1000" step="1" value="500" id="sl-aoa"
+      oninput="updFlight('aoa',this.value/1000)">
+    <span class="fbar-val" id="fv-aoa">0.0</span>
+  </div>
+  <div class="fbar-item" id="fbar-spin-item" style="display:none">
+    <label class="fbar-label">Spin <span class="fbar-unit">RPM</span></label>
+    <input type="range" min="0" max="1000" step="1" value="500" id="sl-spin2"
+      oninput="updFlight('spin2',this.value/1000)">
+    <span class="fbar-val" id="fv-spin2">0</span>
+  </div>
+  <div class="fbar-sep"></div>
+  <div class="fbar-readout">
+    <span class="fbar-ro-lbl">ρ</span>
+    <span class="fbar-ro-val" id="fv-rho">0.00238</span>
+  </div>
+  <div class="fbar-readout">
+    <span class="fbar-ro-lbl">q</span>
+    <span class="fbar-ro-val" id="fv-q">11.9</span>
+  </div>
+  <div class="fbar-readout">
+    <span class="fbar-ro-lbl">Re</span>
+    <span class="fbar-ro-val" id="fv-re">1.2M</span>
+  </div>
+</div>
+
+<script src="main.js"></script>
+<div id="tooltip-box" style="display:none;position:fixed;background:#0D2235;border:1px solid #163348;color:#5A8BAA;font-size:10px;padding:6px 10px;border-radius:4px;max-width:200px;z-index:9999;pointer-events:none;"></div>
+
+</body>
+</html>
