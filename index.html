@@ -106,7 +106,7 @@
       <div class="ctrl-row" id="row-thick">
         <label class="ctrl-label">Thickness <span class="unit-lbl">%c</span></label>
         <div class="ctrl-right">
-          <input type="range" min="1" max="26" step="0.5" value="12.5"
+          <input type="range" min="1" max="70" step="0.5" value="12.5"
             oninput="updFoil('thick',+this.value)" id="sl-thick">
           <input type="text" class="val-box" id="vb-thick" value="12.5"
             onchange="updFoilTxt('thick',+this.value)">
@@ -241,6 +241,7 @@
         <button class="tog" onclick="clearPolarSnaps()">-Polar</button>
         <button class="tog" id="tog-liftmeter" onclick="togDisp('liftmeter',this)">Lift Meter</button>
         <button class="tog" id="tog-particles" onclick="togDisp('particles',this)">Particles</button>
+        <button class="tog" id="btn-em" onclick="togDisp('em', this)">EM Map</button>
       </div>
     </div>
 
@@ -446,6 +447,9 @@
       <span>Scroll: Zoom</span>
     </div>
 
+    <div class="cp-overlay" id="em-overlay" style="display:none;">
+      <canvas id="emCanvas" width="340" height="150"></canvas>
+    </div>
     <!-- Cp plot canvas (overlay bottom) -->
     <div class="cp-overlay" id="cp-overlay">
       <canvas id="cpCanvas" width="340" height="150"></canvas>
@@ -532,6 +536,46 @@
         <div class="dc-row"><span class="dc-lbl">Stall α</span><span class="dc-val" id="out-stall">10.0°</span></div>
         <div class="dc-row"><span class="dc-lbl">Buffet Mach</span><span class="dc-val" id="out-buffet">—</span></div>
         <div class="dc-row"><span class="dc-lbl">Buffet Margin</span><span class="dc-val" id="out-buffetmargin">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Neutral Point</span><span class="dc-val" id="out-np">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Static Margin</span><span class="dc-val" id="out-sm">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Ctr of Press</span><span class="dc-val" id="out-cp2">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">CNα</span><span class="dc-val" id="out-cna">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">CMα</span><span class="dc-val" id="out-cma">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">CMq</span><span class="dc-val" id="out-cmq">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">CG Pos</span><span class="dc-val" id="out-cgpos">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">CP Pos</span><span class="dc-val" id="out-cppos">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">W&B Margin</span><span class="dc-val" id="out-wbmargin">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Transition x/c</span><span class="dc-val" id="out-xtr">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Turb Fraction</span><span class="dc-val" id="out-turbfrac">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Cf Lam</span><span class="dc-val" id="out-cflam">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Cf Turb</span><span class="dc-val" id="out-cfturb">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">CD Skin Fric</span><span class="dc-val" id="out-cdbl">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Cd0 Base</span><span class="dc-val" id="out-cd0base">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Cd0 Re Corr</span><span class="dc-val" id="out-cd0re">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Tip Vortex Γ</span><span class="dc-val" id="out-tipvortex">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Rollup Dist</span><span class="dc-val" id="out-rollup">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Vortex Core r</span><span class="dc-val" id="out-vortexcore">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">T/W Ratio</span><span class="dc-val" id="out-twr">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">SEP</span><span class="dc-val" id="out-sep">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Ps Avail</span><span class="dc-val" id="out-psavail">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Wing Weight</span><span class="dc-val" id="out-wingwt">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Wing Loading</span><span class="dc-val" id="out-wingws">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Load Factor</span><span class="dc-val" id="out-loadfactor">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Limit Load</span><span class="dc-val" id="out-limitload">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Ultimate Load</span><span class="dc-val" id="out-ultload">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Safety Margin</span><span class="dc-val" id="out-safetymargin">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">GJ</span><span class="dc-val" id="out-gj">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Torsion Angle</span><span class="dc-val" id="out-torsion">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Divergence V</span><span class="dc-val" id="out-divspeed">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Cav. Number σ</span><span class="dc-val" id="out-cavnum">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Cavitation</span><span class="dc-val" id="out-cavitation">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Hydro CL</span><span class="dc-val" id="out-hydrocl">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Hydro CD</span><span class="dc-val" id="out-hydrocd">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Magnus CL</span><span class="dc-val" id="out-magnuscl">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Magnus Force</span><span class="dc-val" id="out-magnusforce">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Hydro CNα</span><span class="dc-val" id="out-undercna">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Normal Force</span><span class="dc-val" id="out-undernf">—</span></div>
+        <div class="dc-row"><span class="dc-lbl">Axial Force</span><span class="dc-val" id="out-underaf">—</span></div>
         <div class="dc-row"><span class="dc-lbl">Icing CL</span><span class="dc-val" id="out-icingcl">—</span></div>
         <div class="dc-row"><span class="dc-lbl">Icing CD</span><span class="dc-val" id="out-icingcd">—</span></div>
         <div class="dc-row"><span class="dc-lbl">Icing L/D</span><span class="dc-val" id="out-icingld">—</span></div>
@@ -710,6 +754,12 @@
       <div class="opt-row">
           <span class="opt-label">Turbulence</span>
           <button class="tog" id="tog-turb" onclick="togTurb(this)">OFF</button>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label">CG Position</span>
+        <input type="range" min="0" max="1000" value="200" style="width:55px;"
+          oninput="S.cgPercent=this.value/1000*100; document.getElementById('fv-cg').textContent=S.cgPercent.toFixed(0)+'%'; update(false)">
+        <span id="fv-cg" style="color:#FF6B35;font-size:9px;">20%</span>
       </div>
       <div class="opt-row">
         <span class="opt-label">Fuel Model</span>
