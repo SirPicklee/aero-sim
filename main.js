@@ -88,6 +88,7 @@ const S = {
   fuelModel: false,
   fuelFraction: 1.0,  // 0-1 (empty to full)
   grossWeight: 5000,  // lbs
+  cgPercent: 20.0, // % chord
   multiEngine: false,
   engineCount: 2,
   engineOutIndex: -1, // -1 = all engines, 0..n = failed engine index
@@ -128,6 +129,19 @@ const O = {
   currentWeight: 0.0, fuelWeight: 0.0, clRequired: 0.0, vsActual: 0.0,
   totalThrust: 0.0, asymThrust: 0.0, vmca: 0.0, engineOutDrag: 0.0,
   areaRuleCD: 0.0, waveCD: 0.0,
+  neutralPoint: 0.0, staticMargin: 0.0, cp: 0.0,
+  cna: 0.0, cma: 0.0, cmq: 0.0,
+  cgPos: 0.0, cpPos: 0.0, wbMargin: 0.0,
+  xtr: 0.0, turbFrac: 0.0, cfLam: 0.0, cfTurb: 0.0, cdBL: 0.0,
+  cd0Re: 0.0, cd0Base: 0.0,
+  tipVortexStr: 0.0, rollupDist: 0.0, vortexCore: 0.0,
+  sep: 0.0, twr: 0.0, psAvail: 0.0,
+  wingWeight: 0.0, wingWS: 0.0, wingLoadFactor: 0.0,
+  limitLoad: 0.0, ultimateLoad: 0.0, safetyMargin: 0.0,
+  GJ: 0.0, torsionAngle: 0.0, divergenceSpeed: 0.0,
+  cavitation: 0.0, cavNumber: 0.0, hydroCL: 0.0, hydroCD: 0.0,
+  magnusCL: 0.0, magnusForce: 0.0,
+  underwaterCNa: 0.0, underwaterNF: 0.0, underwaterAF: 0.0,
   isa_dev: 0.0,
   machEff: 0.0,
   lift: 0.0, drag: 0.0,
@@ -456,6 +470,19 @@ function computeAero() {
   let cl;
   O.gamma = gamval;
 
+  // Underwater guidance forces (water env, non-cylinder)
+  if (S.env === 'water' && S.profile !== 'cylinder' && S.profile !== 'ball') {
+    const vFpsU  = S.vel / U.vconv * 1.467;
+    const qU     = 0.5 * O.rho * vFpsU * vFpsU;
+    const aRad   = S.aoa * RAD;
+    // CNα for underwater foil (DATCOM-like, high density)
+    O.underwaterCNa = 2 * PI / (1 + 2 / Math.max(O.ar, 0.5));
+    // Normal force & axial force
+    O.underwaterNF  = O.underwaterCNa * aRad * qU * area;
+    O.underwaterAF  = O.cd * qU * area;
+  } else {
+    O.underwaterCNa = 0; O.underwaterNF = 0; O.underwaterAF = 0;
+  }
   if (S.profile === 'cylinder' || S.profile === 'ball') {
     // Magnus effect: CL from Joukowski directly
     const vfsd = S.vel / U.vconv;
@@ -741,6 +768,151 @@ function computeAero() {
     const cdWinglet = O.cd - O.cdi + O.wingletCDi;
     O.wingletLD = cdWinglet > 0 ? cl / cdWinglet : 0;
   } else {
+    // Torsional stiffness (GJ) & divergence speed
+  const chordFt10 = S.chord / U.lconv;
+  const spanFt10  = S.span  / U.lconv;
+  const t_over_c  = S.thick / 100;
+  // GJ approximation (thin-walled closed section)
+  const wallThick = 0.02 * chordFt10; // assumed skin thickness
+  const perim     = 2 * (chordFt10 + chordFt10 * t_over_c); // approx perimeter
+  const areaCell  = chordFt10 * chordFt10 * t_over_c; // enclosed area
+  const G         = 3.8e6; // shear modulus (aluminum, psi → lbs/ft²)
+  O.GJ = G * 4 * areaCell * areaCell * wallThick / perim;
+  // Torsion angle at tip under aero moment
+  const Mtip = O.cm * O.q0 * chordFt10 * chordFt10 * (spanFt10 / 2);
+  O.torsionAngle = Math.abs(Mtip) * (spanFt10 / 2) / Math.max(O.GJ, 1) * DEG;
+  // Divergence speed
+  const CLa2 = 2 * PI;
+  const eD   = 0.1 * chordFt10; // elastic axis offset
+  O.divergenceSpeed = Math.sqrt(2 * O.GJ / (O.rho * CLa2 * eD * chordFt10 * spanFt10)) * U.vconv;
+  O.divergenceSpeed = Math.min(O.divergenceSpeed, 9999);
+  // Magnus Effect (Cylinder / Ball only)
+  if (S.profile === 'cylinder' || S.profile === 'ball') {
+    const vFpsM   = S.vel / U.vconv * 1.467;
+    const omega   = S.spin * 2 * PI / 60;
+    const radius  = S.radius;
+    const spinRatio = (omega * radius) / Math.max(vFpsM, 0.01);
+    O.magnusCL    = 4 * PI * spinRatio;
+    O.magnusForce = O.magnusCL * O.q0 * (PI * radius * radius);
+  } else {
+    O.magnusCL = 0; O.magnusForce = 0;
+  }
+  // Hydrodynamic / Cavitation (Water environment only)
+  if (S.env === 'water') {
+    const pAtm    = 2116.0;          // psf
+    const pVapor  = 50.0;            // psf (water vapor ~70°F)
+    const vFps    = S.vel / U.vconv * 1.467; // to ft/s
+    const qHydro  = 0.5 * O.rho * vFps * vFps;
+    O.cavNumber   = qHydro > 0 ? (pAtm - pVapor) / qHydro : 999;
+    // Cavitation onset: σ < 2*|Cpmin|
+    const CpMin   = -Math.max(Math.abs(O.cl) * 1.5, 0.3);
+    O.cavitation  = O.cavNumber < 2 * Math.abs(CpMin) ? 1 : 0;
+    // Hydrodynamic CL/CD (density already water)
+    O.hydroCL     = O.cl  * (O.cavitation ? 0.6 : 1.0);
+    O.hydroCD     = O.cd  * (O.cavitation ? 2.5 : 1.0);
+  } else {
+    O.cavNumber = 0; O.cavitation = 0; O.hydroCL = 0; O.hydroCD = 0;
+  }
+    // Safety factor & limit load
+  const nLimit   = 2.5;  // limit load factor (FAR 23)
+  const nUlt2    = nLimit * 1.5; // ultimate load factor
+  const grossWt2 = S.fuelModel ? O.currentWeight / U.fconv : S.grossWeight / U.fconv;
+  O.limitLoad    = grossWt2 * nLimit * U.fconv;
+  O.ultimateLoad = grossWt2 * nUlt2  * U.fconv;
+  O.safetyMargin = O.lift > 0 ? (O.limitLoad - O.lift) / O.limitLoad * 100 : 100;
+    // Wing weight estimation (Raymer method simplified)
+  const spanFt9  = S.span  / U.lconv;
+  const chordFt9 = S.chord / U.lconv;
+  const areaFt9  = area;
+  const grossWt  = S.fuelModel ? O.currentWeight / U.fconv : S.grossWeight / U.fconv;
+  const nUlt     = 3.75; // ultimate load factor (1.5 * 2.5g limit)
+  // Raymer wing weight (lbs)
+  O.wingWeight = 0.0051 * Math.pow(grossWt * nUlt, 0.557)
+               * Math.pow(areaFt9, 0.649)
+               * Math.pow(O.ar, 0.5)
+               * Math.pow(S.thick / 100, -0.4)
+               * Math.pow(1 + S.taper, 0.1)
+               * Math.pow(Math.cos(S.sweep * RAD), -1.0)
+               * U.fconv;
+  // Wing loading
+  O.wingWS = grossWt / areaFt9;
+  // Load factor at current lift
+  O.wingLoadFactor = grossWt > 0 ? (O.lift / U.fconv) / grossWt : 0;
+    // Specific Excess Power & T/W ratio
+  const vfsd8   = S.vel / U.vconv; // ft/s
+  const weight8 = S.fuelModel ? O.currentWeight / U.fconv : S.grossWeight / U.fconv; // lbs
+  const thrust8 = O.totalThrust > 0 ? O.totalThrust / U.fconv : weight8 * 0.3; // lbs
+  const drag8   = O.drag / U.fconv; // lbs
+  O.twr         = weight8 > 0 ? thrust8 / weight8 : 0;
+  O.psAvail     = thrust8 * vfsd8; // available power ft·lbs/s
+  O.sep         = weight8 > 0 ? (thrust8 - drag8) * vfsd8 / weight8 : 0; // ft/s
+  O.sep         *= U.vconv; // convert to mph or km/h
+    // Tip vortex strength & rollup distance
+  const vfsd7  = S.vel / U.vconv;
+  const spanFt7 = S.span / U.lconv;
+  // Tip vortex circulation (Γ)
+  O.tipVortexStr = cl * vfsd7 * (S.chord / U.lconv) / 2;
+  // Rollup distance (Betz approximation)
+  O.rollupDist   = PI * spanFt7 / 4 * (vfsd7 / Math.max(O.tipVortexStr, 0.001)) * U.lconv;
+  O.rollupDist   = Math.min(O.rollupDist, 9999);
+  // Vortex core radius (Squire model)
+  O.vortexCore   = 0.052 * Math.sqrt(O.tipVortexStr / (PI * Math.max(vfsd7, 1))) * U.lconv;
+    // Reynolds-based Cd0 correction
+  const re6    = O.re;
+  // Base profile drag (thickness dependent)
+  O.cd0Base    = 0.004 + 0.008 * (S.thick / 100);
+  // Re correction factor (Prandtl-Schlichting)
+  const reFact = re6 > 0 ? 0.455 / Math.pow(Math.log10(re6), 2.58) : O.cd0Base;
+  O.cd0Re      = O.cd0Base * (reFact / 0.003); // normalized to typical value
+  O.cd0Re      = Math.max(0.001, Math.min(0.05, O.cd0Re));
+    // Boundary layer transition
+  const re5      = O.re;
+  const chordFt6 = S.chord / U.lconv;
+  // Transition Reynolds number (Michel criterion approximation)
+  const reTr     = Math.min(re5, 3e6);
+  O.xtr          = reTr / re5; // transition location as fraction of chord
+  O.turbFrac     = 1 - O.xtr;
+  // Laminar friction coefficient (Blasius)
+  O.cfLam        = re5 > 0 ? 1.328 / Math.sqrt(re5 * O.xtr + 1) : 0;
+  // Turbulent friction coefficient (Prandtl)
+  O.cfTurb       = re5 > 0 ? 0.074 / Math.pow(re5, 0.2) : 0;
+  // Blended skin friction drag
+  const wetArea  = 2 * area * 1.02; // wetted area approx
+  O.cdBL         = (O.cfLam * O.xtr + O.cfTurb * O.turbFrac) * wetArea / area;
+    // Weight & Balance
+  const chordFt5 = S.chord / U.lconv;
+  O.cgPos   = S.cgPercent / 100 * chordFt5 * U.lconv;
+  O.cpPos   = O.cp;
+  O.wbMargin = (O.neutralPoint - O.cgPos) / (chordFt5 * U.lconv) * 100; // % chord
+    // CNα, CMα, CMq derivatives
+  const chordFt4 = S.chord / U.lconv;
+  const spanFt4  = S.span  / U.lconv;
+  const ar4      = O.ar;
+  const sweepRad4 = S.sweep * RAD;
+
+  // CNα (per radian) — DATCOM approximation
+  const eta    = 0.95; // airfoil efficiency
+  O.cna = 2 * PI * ar4 / (2 + Math.sqrt(4 + ar4 * ar4 * (1 + Math.tan(sweepRad4) ** 2)));
+  O.cna *= eta;
+
+  // CMα (pitch stiffness) — negative = stable
+  O.cma = -O.cna * (O.neutralPoint / U.lconv - 0.20 * chordFt4) / chordFt4;
+
+  // CMq (pitch damping derivative)
+  O.cmq = -0.5 * O.cna * Math.pow(chordFt4, 2) / Math.pow(chordFt4, 2);
+  O.cmq = -12.0 * eta; // simplified pitch damping
+    // Neutral point & static margin
+  const chordFt3 = S.chord / U.lconv;
+  const sweepRad = S.sweep * RAD;
+  // Aerodynamic center (AC) at 25% chord, swept wing correction
+  const acPos    = 0.25 + 0.1 * Math.tan(sweepRad) * (S.span / U.lconv) / (2 * chordFt3);
+  // Neutral point (simplified, tail contribution ignored)
+  O.neutralPoint = acPos * chordFt3 * U.lconv; // distance from LE
+  // Center of pressure
+  O.cp = O.cl !== 0 ? (0.25 - O.cm / O.cl) * chordFt3 * U.lconv : O.neutralPoint;
+  // Static margin (NP - CG) / chord, assume CG at 20% chord
+  const cgPos    = 0.20 * chordFt3;
+  O.staticMargin = (O.neutralPoint / U.lconv - cgPos) / chordFt3 * 100; // % chord
     // Transonic Area Rule (Whitcomb)
   const chordFt2 = S.chord / U.lconv;
   const spanFt2  = S.span  / U.lconv;
@@ -1925,6 +2097,52 @@ function drawFlowField() {
   ctx.textAlign = 'left';
   ctx.fillText(`FLOW FIELD  α=${S.aoa.toFixed(1)}°  Γ=${O.gamma.toFixed(3)}`, 6, 12);
 }
+function drawEM() {
+  if (!S.disp.em) return;
+  const canvas = document.getElementById('emCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0A1A2A';
+  ctx.fillRect(0, 0, W, H);
+
+  const vSteps = 30, hSteps = 20;
+  const vMax = U.vmax, hMax = U.altmax;
+
+  for (let i = 0; i < vSteps; i++) {
+    for (let j = 0; j < hSteps; j++) {
+      const v   = (i / vSteps) * vMax;
+      const alt = (j / hSteps) * hMax;
+      const rho = 0.002377 * Math.pow(1 - alt / 145442, 4.256);
+      const q   = 0.5 * rho * Math.pow(v / U.vconv, 2);
+      const thrust = O.totalThrust > 0 ? O.totalThrust / U.fconv : S.grossWeight / U.fconv * 0.3;
+      const drag   = O.cd * q * O.area;
+      const weight = S.fuelModel ? O.currentWeight / U.fconv : S.grossWeight / U.fconv;
+      const sep    = weight > 0 ? (thrust - drag) * (v / U.vconv) / weight : 0;
+
+      const x = i / vSteps * W;
+      const y = H - j / hSteps * H;
+      const norm = Math.max(0, Math.min(1, (sep + 100) / 300));
+      const r = Math.floor(255 * (1 - norm));
+      const g = Math.floor(200 * norm);
+      ctx.fillStyle = `rgb(${r},${g},80)`;
+      ctx.fillRect(x, y, W / vSteps + 1, H / hSteps + 1);
+    }
+  }
+
+  const cx = (S.vel / vMax) * W;
+  const cy = H - (S.alt / hMax) * H;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 5, 0, 2 * PI);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fill();
+
+  ctx.fillStyle = '#5A8BAA';
+  ctx.font = '8px monospace';
+  ctx.fillText('V →', W - 20, H - 4);
+  ctx.fillText('Alt', 2, 10);
+}
 // ─── DRAW CP CANVAS ───────────────────────────────────────────
 function drawCpCanvas() {
   const canvas = document.getElementById('cpCanvas');
@@ -2647,6 +2865,7 @@ function togDisp(key, el) {
   S.disp[key] = !S.disp[key];
   el.classList.toggle('active', S.disp[key]);
   document.getElementById('cp-overlay').style.display   = S.disp.cp   ? '' : 'none';
+  document.getElementById('em-overlay').style.display   = S.disp.em   ? '' : 'none';
   document.getElementById('foil-overlay').style.display = S.disp.foil ? '' : 'none';
   document.getElementById('flow-overlay').style.display = S.disp.flow ? '' : 'none';
   document.getElementById('clplot-overlay').style.display = S.disp.clplot ? '' : 'none';
@@ -3671,7 +3890,7 @@ function resetAll() {
   S.env      = 'earth';
   S.arCorr   = false; S.stallModel = true; S.pgCorr = true;
   S.units    = 'imperial';
-  S.disp     = { wire: true, ribs: true, grid: true, rot: false, cp: true, foil: true };
+  S.disp     = { wire: true, ribs: true, grid: true, rot: false, cp: true, foil: true, em: false };
 
   setUnitFactors();
   syncSliders();
@@ -3696,7 +3915,7 @@ function syncSliders() {
   }
 
   setSlider('sl-camber', S.camber, -25, 25);   setVB('vb-camber', S.camber, 1);
-  setSlider('sl-thick',  S.thick,  1,  26);    setVB('vb-thick',  S.thick,  1);
+  setSlider('sl-thick',  S.thick,  1,  70);    setVB('vb-thick',  S.thick,  1);
   setSlider('sl-span',   S.span,   1,  80);    setVB('vb-span',   S.span,   1);
   setSlider('sl-chord',  S.chord,  0.5, 20);   setVB('vb-chord',  S.chord,  1);
   setSlider('sl-taper',  S.taper,  0,  1);     setVB('vb-taper',  S.taper,  2);
@@ -3763,6 +3982,75 @@ function displayOutputs() {
   setText('out-buffet', fmt(O.machBuffet, 3));
   const bmColor = O.buffetMargin < 0.05 ? '#FF1744' : O.buffetMargin < 0.1 ? '#FF9800' : '#00E5A0';
   setText('out-buffetmargin', `<span style="color:${bmColor}">${fmt(O.buffetMargin, 3)}</span>`);
+  const lUnit3 = imp ? 'ft' : 'm';
+  setText('out-np',  fmt(O.neutralPoint, 3) + ` <span class="dc-unit">${lUnit3}</span>`);
+  const smColor = O.staticMargin < 0 ? '#FF1744' : O.staticMargin < 5 ? '#FF9800' : '#00E5A0';
+  setText('out-sm',  `<span style="color:${smColor}">${fmt(O.staticMargin, 1)}%</span>`);
+  setText('out-cp2', fmt(O.cp, 3) + ` <span class="dc-unit">${lUnit3}</span>`);
+  setText('out-cna', fmt(O.cna, 3) + ' <span class="dc-unit">/rad</span>');
+  const cmaColor = O.cma < 0 ? '#00E5A0' : '#FF1744';
+  setText('out-cma', `<span style="color:${cmaColor}">${fmt(O.cma, 3)}</span>`);
+  setText('out-cmq', fmt(O.cmq, 2));
+  const lUnit4 = imp ? 'ft' : 'm';
+  setText('out-cgpos', fmt(O.cgPos, 3) + ` <span class="dc-unit">${lUnit4}</span>`);
+  setText('out-cppos', fmt(O.cpPos, 3) + ` <span class="dc-unit">${lUnit4}</span>`);
+  const wbColor = O.wbMargin < 0 ? '#FF1744' : O.wbMargin < 5 ? '#FF9800' : '#00E5A0';
+  setText('out-wbmargin', `<span style="color:${wbColor}">${fmt(O.wbMargin, 1)}%</span>`);
+  setText('out-xtr',      fmt(O.xtr,      3));
+  setText('out-turbfrac', fmt(O.turbFrac, 3));
+  setText('out-cd0base', fmt(O.cd0Base, 5));
+  const lUnit5 = imp ? 'ft' : 'm';
+  setText('out-tipvortex', fmt(O.tipVortexStr, 3) + ' <span class="dc-unit">ft²/s</span>');
+  setText('out-rollup',    fmt(O.rollupDist,   1) + ` <span class="dc-unit">${lUnit5}</span>`);
+  setText('out-twr',     fmt(O.twr, 3));
+  const sepColor = O.sep > 0 ? '#00E5A0' : '#FF1744';
+  setText('out-sep',     `<span style="color:${sepColor}">${fmt(O.sep, 1)}</span> <span class="dc-unit">${imp ? 'mph' : 'km/h'}</span>`);
+  setText('out-psavail', fmt(O.psAvail, 0) + ' <span class="dc-unit">ft·lbs/s</span>');
+  setText('out-wingwt',    fmt(O.wingWeight,    1) + ` <span class="dc-unit">${imp ? 'lbs' : 'N'}</span>`);
+  setText('out-wingws',    fmt(O.wingWS,        2) + ` <span class="dc-unit">${imp ? 'lbs/ft²' : 'N/m²'}</span>`);
+  setText('out-limitload',  fmt(O.limitLoad,   1) + ` <span class="dc-unit">${imp ? 'lbs' : 'N'}</span>`);
+  setText('out-ultload',    fmt(O.ultimateLoad, 1) + ` <span class="dc-unit">${imp ? 'lbs' : 'N'}</span>`);
+  const smgColor = O.safetyMargin < 0 ? '#FF1744' : O.safetyMargin < 20 ? '#FF9800' : '#00E5A0';
+  setText('out-safetymargin', `<span style="color:${smgColor}">${fmt(O.safetyMargin, 1)}%</span>`);
+  setText('out-gj',      fmt(O.GJ,             0) + ' <span class="dc-unit">lb·ft²</span>');
+  setText('out-torsion', fmt(O.torsionAngle,    3) + ' <span class="dc-unit">°</span>');
+  const dvColor = O.divergenceSpeed < S.vel * 1.5 ? '#FF1744' : O.divergenceSpeed < S.vel * 3 ? '#FF9800' : '#00E5A0';
+  setText('out-divspeed', `<span style="color:${dvColor}">${fmt(O.divergenceSpeed, 1)}</span> <span class="dc-unit">${imp ? 'mph' : 'km/h'}</span>`);
+  if (S.env === 'water') {
+    const cavColor = O.cavitation ? '#FF1744' : '#00E5A0';
+    const cavNumColor = O.cavNumber > 2 ? '#00E5A0' : O.cavNumber > 1 ? '#FF9800' : '#FF1744';
+    setText('out-cavnum', `<span style="color:${cavNumColor}">${fmt(O.cavNumber, 3)}</span>`);
+    setText('out-cavitation', `<span style="color:${cavColor}">${O.cavitation ? '⚠ CAVITATING' : 'CLEAR'}</span>`);
+    setText('out-hydrocl',  fmt(O.hydroCL, 4));
+    setText('out-hydrocd',  fmt(O.hydroCD, 4));
+  } else {
+    setText('out-cavnum',    '—');
+    setText('out-cavitation','—');
+    setText('out-hydrocl',  '—');
+    setText('out-hydrocd',  '—');
+  }
+  if (S.profile === 'cylinder' || S.profile === 'ball') {
+    setText('out-magnuscl',    fmt(O.magnusCL, 4));
+    setText('out-magnusforce', fmt(O.magnusForce, 1) + ` <span class="dc-unit">${imp ? 'lbs' : 'N'}</span>`);
+  } else {
+    setText('out-magnuscl',    '—');
+    setText('out-magnusforce', '—');
+  }
+  if (S.env === 'water' && S.profile !== 'cylinder' && S.profile !== 'ball') {
+    setText('out-undercna', fmt(O.underwaterCNa, 4));
+    setText('out-undernf',  fmt(O.underwaterNF,  1) + ` <span class="dc-unit">${imp ? 'lbs' : 'N'}</span>`);
+    setText('out-underaf',  fmt(O.underwaterAF,  1) + ` <span class="dc-unit">${imp ? 'lbs' : 'N'}</span>`);
+  } else {
+    setText('out-undercna', '—');
+    setText('out-undernf',  '—');
+    setText('out-underaf',  '—');
+  }
+  setText('out-loadfactor',fmt(O.wingLoadFactor,2) + ' <span class="dc-unit">g</span>');
+  setText('out-vortexcore',fmt(O.vortexCore,   3) + ` <span class="dc-unit">${lUnit5}</span>`);
+  setText('out-cd0re',   fmt(O.cd0Re,   5));
+  setText('out-cflam',    fmt(O.cfLam,    5));
+  setText('out-cfturb',   fmt(O.cfTurb,   5));
+  setText('out-cdbl',     fmt(O.cdBL,     5));
   setText('out-icingcl', fmt(O.icingCL, 3));
   setText('out-icingcd', fmt(O.icingCD, 4));
   setText('out-icingld', fmt(O.icingLD, 1));
@@ -3863,6 +4151,7 @@ function update(rebuild3D = true) {
   if (rebuild3D) buildWing();
   drawFoilCanvas();
   if (S.disp.cp) drawCpCanvas();
+  if (S.disp.em) drawEM();
   if (S.disp.flow) drawFlowField();
   if (S.disp.clplot) drawClPlot();
   if (S.disp.liftmeter) drawLiftMeter();
