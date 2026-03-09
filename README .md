@@ -3,6 +3,21 @@
 
 > Real-time, browser-based aerodynamics simulator. No server. No build tools. Open `index.html` and fly.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-yellow.svg)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+[![Three.js](https://img.shields.io/badge/Three.js-r128-black.svg)](https://threejs.org)
+[![No Dependencies](https://img.shields.io/badge/npm%20packages-0-brightgreen.svg)]()
+[![WebGL](https://img.shields.io/badge/WebGL-required-orange.svg)]()
+
+---
+
+> 📸 **Screenshot / GIF**
+> *(Add a screenshot or GIF of the simulator here — drag and drop an image into a GitHub Issue to get a link, then paste it below)*
+>
+> ```markdown
+> ![AERO-SIM Demo](assets/screenshot.png)
+> ```
+
 ---
 
 ## 📋 Table of Contents
@@ -19,11 +34,20 @@
 10. [Physics & Theory Reference](#physics--theory-reference)
 11. [File Structure](#file-structure)
 12. [Dependencies](#dependencies)
-13. [License](#license)
+13. [Roadmap](#roadmap)
+14. [Contributing](#contributing)
+15. [License](#license)
 
 ---
 
 ## Overview
+## 🖼️ Screenshots
+
+![AERO-SIM](https://github.com/user-attachments/assets/40fa8001-0ab0-40ce-bda6-234c594c2935)
+![AERO-SIM](https://github.com/user-attachments/assets/784fdc23-fc7f-44ca-986a-f7c10b352383)
+![AERO-SIM](https://github.com/user-attachments/assets/842a6f2d-5e0b-4ba1-9803-8a0f5dfc2705)
+![AERO-SIM](https://github.com/user-attachments/assets/1870660c-5b0b-435e-a8ec-c8c64faf704d)
+![AERO-SIM](https://github.com/user-attachments/assets/6ac6e15b-f1b2-4060-81ff-9f61880a57c9)
 
 AERO-SIM is a full-featured aerodynamic analysis tool that runs entirely in the browser. It implements Kutta–Joukowski potential flow theory, ISA atmosphere modeling, and a wide range of real-world aerodynamic corrections — from Prandtl–Glauert compressibility to aeroelastic flutter, cavitation, sonic booms, and dynamic stability modes. All computations run in real time as you move any slider.
 
@@ -593,6 +617,33 @@ No npm packages. No bundler. No backend. No installation.
 | Mobile Chrome | ✅ Touch orbit supported |
 
 WebGL is required for the 3D viewport.
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] GitHub Pages live demo
+- [ ] 3D WebGL flow field visualization
+- [ ] Panel method (higher-order alternative to VLM)
+- [ ] NACA 5-digit series full support
+- [ ] Multi-element airfoil (slat + flap + main element)
+- [ ] Compressible VLM (subsonic panel method)
+- [ ] Export results as PNG / PDF report
+- [ ] Drag polar database comparison (NACA TR data overlay)
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Whether it's a bug fix, a new physics module, or a UI improvement:
+
+1. Fork the repository
+2. Create your feature branch: `git checkout -b feature/my-feature`
+3. Commit your changes with a clear message: `git commit -m 'Add: Theodorsen flutter module improvements'`
+4. Push to your branch: `git push origin feature/my-feature`
+5. Open a Pull Request describing what you changed and why
+
+Please keep contributions focused on aerodynamic accuracy and browser performance. No build tools or npm dependencies — the zero-install philosophy is intentional.
 
 ---
 
